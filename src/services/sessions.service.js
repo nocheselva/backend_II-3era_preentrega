@@ -1,39 +1,37 @@
-import { UsersDAO } from '../dao/users.dao.js';
-import { UsersRepository } from '../repositories/users.repository.js';
-import { createHash } from '../utils/hash.js';
-
-// Instanciamos la arquitectura DAO -> Repository
-const usersDAO = new UsersDAO();
-const usersRepository = new UsersRepository(usersDAO);
+import User from '../models/User.js'; // <--- Importación por defecto sin {}
+import { createHash, isValidPassword } from '../utils/hash.js';
 
 export class SessionsService {
-  async registerUser({ first_name, last_name, email, password }) {
-    // 1. Verificar si el usuario ya existe (el email ya viene normalizado desde el Controller)
-    const existingUser = await usersRepository.getUserByEmail(email);
-    if (existingUser) {
-      const error = new Error('El email ya está registrado');
-      error.statusCode = 409;
-      throw error;
-    }
+  async registerUser(userData) {
+    const { first_name, last_name, email, password } = userData;
 
-    // 2. Hashear la contraseña con bcrypt
     const hashedPassword = createHash(password);
 
-    // 3. Crear el usuario (se omite 'role' para que Mongoose use 'user' por defecto)
-    const savedUser = await usersRepository.createUser({
+    const newUser = await User.create({
       first_name,
       last_name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      role: 'user'
     });
 
-    // 4. Retornar el usuario SIN la contraseña (la omitimos completamente)
     return {
-      id: savedUser._id,
-      first_name: savedUser.first_name,
-      last_name: savedUser.last_name,
-      email: savedUser.email,
-      role: savedUser.role
+      id: newUser._id,
+      first_name: newUser.first_name,
+      last_name: newUser.last_name,
+      email: newUser.email,
+      role: newUser.role
     };
+  }
+
+  async loginUser(email, password) {
+    const user = await User.findOne({ email });
+
+    if (!user) return null;
+
+    const validPassword = isValidPassword(password, user.password);
+    if (!validPassword) return null;
+
+    return user;
   }
 }
